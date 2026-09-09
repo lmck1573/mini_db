@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# 运行时数据（数据库文件不入库，仅保留目录）
+data/*
+!data/.gitkeep
+
+# 测试临时数据（临时数据库文件不入库）
+tests/tmp/*
+!tests/tmp/.gitkeep
+
+# 编辑器 / 系统
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# 报告产物
+*.log

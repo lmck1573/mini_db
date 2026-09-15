@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>6. 全局聚合</title>
+<style>
+  :root {
+    --bg: #f6f7fb;
+    --panel: #ffffff;
+    --text: #1f2733;
+    --muted: #6b7280;
+    --line: #e3e7ef;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #14171c;
+      --panel: #1c2027;
+      --text: #eef1f6;
+      --muted: #9aa4b2;
+      --line: #2b313a;
+    }
+    .canvas { background: #22262e; }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 28px 24px 40px;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei",
+                 "PingFang SC", sans-serif;
+  }
+  h1 { font-size: 19px; margin: 0 0 6px; }
+  .sub { margin: 0 0 18px; color: var(--muted); font-size: 13px; }
+  .sub pre {
+    margin: 8px 0 0; padding: 10px 12px; background: var(--panel);
+    border: 1px solid var(--line); border-radius: 8px; font-size: 12.5px;
+    white-space: pre-wrap; word-break: break-all;
+  }
+  .canvas {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+    padding: 18px; overflow-x: auto;
+  }
+  .canvas svg { display: block; margin: 0 auto; }
+  .legend { margin-top: 16px; display: flex; flex-wrap: wrap; gap: 8px; }
+  .chip {
+    font-size: 12px; padding: 3px 10px; border-radius: 999px;
+    border: 1px solid; font-weight: 600;
+  }
+  .node { cursor: default; }
+  .node rect { transition: filter .15s ease; }
+  .node:hover rect { filter: drop-shadow(0 3px 8px rgba(0,0,0,.18)); }
+  footer { margin-top: 20px; color: var(--muted); font-size: 12px; }
+</style>
+</head>
+<body>
+<h1>6. 全局聚合</h1>
+<div class="sub">
+  生成的计划树（自顶向下阅读，根节点在最上方）。悬停任意节点可查看其 JSON 结构。
+  <pre>SELECT COUNT(*), MAX(score), MIN(score), SUM(score) FROM score;</pre>
+</div>
+<div class="canvas">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 488 354" width="488" height="354" role="img" aria-label="执行计划树">
+<path d="M 221.2 73.0 V 94.0 H 244.0 V 115.0" fill="none" stroke="#c2c9d6" stroke-width="1.6"/>
+<path d="M 244.0 177.0 V 198.0 H 106.0 V 219.0" fill="none" stroke="#c2c9d6" stroke-width="1.6"/>
+<g class="node">
+<title>{&quot;op&quot;: &quot;Project&quot;, &quot;columns&quot;: [&quot;COUNT(*)&quot;, &quot;MAX(score)&quot;, &quot;MIN(score)&quot;, &quot;SUM(score)&quot;], &quot;child&quot;: {&quot;op&quot;: &quot;Aggregate&quot;, &quot;group_by&quot;: [], &quot;group_labels&quot;: [], &quot;aggregates&quot;: [{&quot;func&quot;: &quot;COUNT&quot;, &quot;label&quot;: &quot;COUNT(*)&quot;, &quot;star&quot;: true, &quot;arg&quot;: null}, {&quot;func&quot;: &quot;MAX&quot;, &quot;label&quot;: &quot;MAX(score)&quot;, &quot;star&quot;: false, &quot;arg&quot;: {&quot;type&quot;: &quot;ColumnRef&quot;, &quot;name&quot;: &quot;score&quot;}}, {&quot;func&quot;: &quot;MIN&quot;, &quot;label&quot;: &quot;MIN(score)&quot;, &quot;star&quot;: false, &quot;arg&quot;: {&quot;type&quot;: &quot;ColumnRef&quot;, &quot;name&quot;: &quot;score&quot;}}, {&quot;func&quot;: &quot;SUM&quot;, &quot;label&quot;: &quot;SUM(score)&quot;, &quot;star&quot;: false, &quot;arg&quot;: {&quot;type&quot;: &quot;ColumnRef&quot;, &quot;name&quot;: &quot;score&quot;}}], &quot;child&quot;: {&quot;op&quot;: &quot;SeqScan&quot;, &quot;table_name&quot;: &quot;score&quot;}}, &quot;exprs&quot;: [{&quot;type&quot;: &quot;ColumnRef&quot;, &quot;name&quot;: &quot;COUNT(*)&quot;}, {&quot;type&quot;: &quot;ColumnRef&quot;, &quot;name&quot;: &quot;MAX(score)&quot;}, {&quot;type&quot;: &quot;ColumnRef&quot;, &quot;name&quot;: &quot;MIN(score)&quot;}, {&quot;type&quot;: &quot;ColumnRef&quot;, &quot;name&quot;: &quot;SUM(score)&quot;}], &quot;labels&quot;: [&quot;COUNT(*)&quot;, &quot;MAX(score)&quot;, &quot;MIN(score)&quot;, &quot;SUM(score)&quot;]}</title>
+<rect x="40.0" y="11.0" width="362.4" height="62" rx="9" fill="#e6f7ee" stroke="#27ae60" stroke-width="1.8"/>
+<text x="221.2" y="33.0" text-anchor="middle" font-size="14" font-weight="700" fill="#1b7a44">Project</text>
+<text x="221.2" y="51.0" text-anchor="middle" font-size="11.5" fill="#4a5568">COUNT(*), MAX(score), MIN(sco…</text>
+</g>
+<g class="node">
+<title>{&quot;op&quot;: &quot;Aggregate&quot;, &quot;group_by&quot;: [], &quot;group_labels&quot;: [], &quot;aggregates&quot;: [{&quot;func&quot;: &quot;COUNT&quot;, &quot;label&quot;: &quot;COUNT(*)&quot;, &quot;star&quot;: true, &quot;arg&quot;: null}, {&quot;func&quot;: &quot;MAX&quot;, &quot;label&quot;: &quot;MAX(score)&quot;, &quot;star&quot;: false, &quot;arg&quot;: {&quot;type&quot;: &quot;ColumnRef&quot;, &quot;name&quot;: &quot;score&quot;}}, {&quot;func&quot;: &quot;MIN&quot;, &quot;label&quot;: &quot;MIN(score)&quot;, &quot;star&quot;: false, &quot;arg&quot;: {&quot;type&quot;: &quot;ColumnRef&quot;, &quot;name&quot;: &quot;score&quot;}}, {&quot;func&quot;: &quot;SUM&quot;, &quot;label&quot;: &quot;SUM(score)&quot;, &quot;star&quot;: false, &quot;arg&quot;: {&quot;type&quot;: &quot;ColumnRef&quot;, &quot;name&quot;: &quot;score&quot;}}], &quot;child&quot;: {&quot;op&quot;: &quot;SeqScan&quot;, &quot;table_name&quot;: &quot;score&quot;}}</title>
+<rect x="40.0" y="115.0" width="408.0" height="62" rx="9" fill="#e0f7f7" stroke="#00a3a3" stroke-width="1.8"/>
+<text x="244.0" y="137.0" text-anchor="middle" font-size="14" font-weight="700" fill="#017070">Aggregate</text>
+<text x="244.0" y="155.0" text-anchor="middle" font-size="11.5" fill="#4a5568">group by: (全局)</text>
+<text x="244.0" y="170.0" text-anchor="middle" font-size="11.5" fill="#4a5568">aggs: COUNT(*), MAX(score), M…</text>
+</g>
+<g class="node">
+<title>{&quot;op&quot;: &quot;SeqScan&quot;, &quot;table_name&quot;: &quot;score&quot;}</title>
+<rect x="40.0" y="219.0" width="132.0" height="62" rx="9" fill="#e6f0ff" stroke="#2f80ed" stroke-width="1.8"/>
+<text x="106.0" y="241.0" text-anchor="middle" font-size="14" font-weight="700" fill="#1a5fb4">SeqScan</text>
+<text x="106.0" y="259.0" text-anchor="middle" font-size="11.5" fill="#4a5568">table = score</text>
+</g>
+</svg>
+</div>
+<div class="legend"><span class="chip" style="background:#eeeaff;border-color:#7c6cf0;color:#4a3fbf">DDL/DML</span><span class="chip" style="background:#e6f0ff;border-color:#2f80ed;color:#1a5fb4">顺序扫描</span><span class="chip" style="background:#fff2e3;border-color:#f2994a;color:#b8600f">过滤</span><span class="chip" style="background:#e6f7ee;border-color:#27ae60;color:#1b7a44">投影</span><span class="chip" style="background:#ffe9e9;border-color:#eb5757;color:#b32b2b">连接</span><span class="chip" style="background:#e0f7f7;border-color:#00a3a3;color:#017070">聚合</span><span class="chip" style="background:#eef2f7;border-color:#6b7a90;color:#44546a">排序</span></div>
+<footer>Mini-DB · 模块一 SQL 编译器 · 计划可视化</footer>
+</body>
+</html>

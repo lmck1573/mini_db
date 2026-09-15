@@ -5,15 +5,15 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import List, Optional, Tuple
 
 from .errors import CompileError
 from .lexer import tokenize
 from .lexer.token import Token, TokenType
-from .parser.ast_nodes import Statement
+from .parser.ast_nodes import Explain, Statement
 from .parser.parser import Parser
-from .planner.planner import plan
+from .planner.planner import plan_with_optimization
 from .planner.plan_nodes import PlanNode
 from .semantic.analyzer import analyze
 from .semantic.catalog import Catalog
@@ -29,8 +29,19 @@ class StatementResult:
     ast: Optional[Statement]
     semantic_ok: bool = False
     message: str = ""
-    plan: Optional[PlanNode] = None
+    plan: Optional[PlanNode] = None          # 优化后的执行计划
+    raw_plan: Optional[PlanNode] = None      # 优化前的原始计划（用于对比展示）
+    optimizations: List[str] = field(default_factory=list)  # 命中的优化规则
+    explain: bool = False                    # 是否为 EXPLAIN（只输出计划，不执行）
+    # EXPLAIN 的计划只用于展示，**不放进 plan 字段**，
+    # 这样执行引擎看到 plan is None 会自动跳过，不会误执行被解释的语句。
+    explain_plan: Optional[PlanNode] = None
     error: Optional[CompileError] = None
+
+    @property
+    def display_plan(self) -> Optional[PlanNode]:
+        """用于展示的计划（普通语句为优化后计划，EXPLAIN 为被解释语句的计划）。"""
+        return self.explain_plan if self.explain else self.plan
 
 
 class SQLCompiler:
@@ -70,12 +81,19 @@ class SQLCompiler:
                 sql=_rebuild_sql(stmt_tokens),
                 tokens=stmt_tokens,
                 ast=stmt,
+                explain=isinstance(stmt, Explain),
             )
             results.append(result)
             try:
                 result.message = analyze([stmt], self.catalog)[0]
                 result.semantic_ok = True
-                result.plan = plan(stmt, self.catalog)
+                raw, optimized, applied = plan_with_optimization(stmt, self.catalog)
+                result.raw_plan = raw
+                result.optimizations = applied
+                if result.explain:
+                    result.explain_plan = optimized
+                else:
+                    result.plan = optimized
             except CompileError as err:
                 result.error = err
                 result.message = str(err)
@@ -87,12 +105,30 @@ class SQLCompiler:
 
 def _rebuild_sql(tokens: List[Token]) -> str:
     """由 Token 词素重建语句文本（仅用于展示，不做精确还原）。"""
+    from .lexer.keywords import TYPE_KEYWORDS
+
     parts: List[str] = []
-    for i, token in enumerate(tokens):
+    previous: Optional[Token] = None
+    for token in tokens:
         if token.type is TokenType.EOF:
             continue
-        lexeme = token.lexeme
-        if i > 0 and lexeme not in (",", ")", ";") and tokens[i - 1].lexeme != "(":
+        if previous is not None and _needs_space(previous, token, TYPE_KEYWORDS):
             parts.append(" ")
-        parts.append(lexeme)
+        parts.append(token.lexeme)
+        previous = token
     return "".join(parts)
+
+
+def _needs_space(previous: Token, current: Token, type_keywords) -> bool:
+    """决定两个 Token 之间是否需要插入空格，让重建的 SQL 更好读。"""
+    if current.lexeme in (",", ")", ";", "."):
+        return False
+    if previous.lexeme in ("(", "."):
+        return False
+    if current.lexeme == "(":
+        # 类型名或函数名紧跟括号：VARCHAR(20) / COUNT(*)
+        if previous.type is TokenType.IDENTIFIER:
+            return False
+        if previous.type is TokenType.KEYWORD and previous.lexeme.upper() in type_keywords:
+            return False
+    return True

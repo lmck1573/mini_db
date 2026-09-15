@@ -1,4 +1,4 @@
-"""语法分析器测试（P0 范围）。"""
+"""语法分析器测试。"""
 
 import unittest
 
@@ -6,7 +6,8 @@ from src.compiler.errors import SyntaxErr
 from src.compiler.lexer import tokenize
 from src.compiler.parser import parse
 from src.compiler.parser.ast_nodes import (BinaryOp, ColumnRef, CreateTable,
-                                           Delete, Insert, Literal, Select)
+                                           Delete, Insert, Literal, Select,
+                                           UnaryOp)
 
 
 def parse_one(sql):
@@ -106,22 +107,43 @@ class TestParserErrors(unittest.TestCase):
         with self.assertRaises(SyntaxErr):
             parse_one("UPDATE student SET age = 1;")
 
-    def test_and_is_rejected_in_p0(self):
-        with self.assertRaises(SyntaxErr) as ctx:
-            parse_one("SELECT * FROM t WHERE a > 1 AND b < 2;")
-        self.assertIn("P0 不支持", ctx.exception.message)
+    def test_and_expression(self):
+        """AND 逻辑组合（P1）。"""
+        stmt = parse_one("SELECT * FROM t WHERE a > 1 AND b < 2;")
+        self.assertIsInstance(stmt.where, BinaryOp)
+        self.assertEqual(stmt.where.op, "AND")
+        self.assertEqual(stmt.where.left.op, ">")
+        self.assertEqual(stmt.where.right.op, "<")
 
-    def test_or_is_rejected_in_p0(self):
-        with self.assertRaises(SyntaxErr):
-            parse_one("SELECT * FROM t WHERE a > 1 OR b < 2;")
+    def test_or_expression(self):
+        stmt = parse_one("SELECT * FROM t WHERE a > 1 OR b < 2;")
+        self.assertEqual(stmt.where.op, "OR")
 
-    def test_arithmetic_is_rejected_in_p0(self):
-        with self.assertRaises(SyntaxErr):
-            parse_one("SELECT * FROM t WHERE a + 1 > 2;")
+    def test_arithmetic_precedence(self):
+        """乘法优先于加法：a + 1 * 2 > 40  =>  (a + (1 * 2)) > 40。"""
+        stmt = parse_one("SELECT * FROM t WHERE a + 1 * 2 > 40;")
+        self.assertEqual(stmt.where.op, ">")
+        self.assertEqual(stmt.where.left.op, "+")
+        self.assertEqual(stmt.where.left.right.op, "*")
 
-    def test_parenthesized_expr_rejected_in_p0(self):
-        with self.assertRaises(SyntaxErr):
-            parse_one("SELECT * FROM t WHERE (a > 1);")
+    def test_parenthesized_expression(self):
+        """括号改变结合顺序。"""
+        stmt = parse_one("SELECT * FROM t WHERE (a > 1) AND (b < 2);")
+        self.assertEqual(stmt.where.op, "AND")
+
+    def test_not_expression(self):
+        """NOT 优先级低于比较：NOT a = 1  =>  NOT (a = 1)。"""
+        stmt = parse_one("SELECT * FROM t WHERE NOT a = 1;")
+        self.assertIsInstance(stmt.where, UnaryOp)
+        self.assertEqual(stmt.where.op, "NOT")
+        self.assertIsInstance(stmt.where.operand, BinaryOp)
+
+    def test_complex_nested_expression(self):
+        stmt = parse_one(
+            "SELECT * FROM t WHERE (age + 1) * 2 > 40 AND name <> 'x';")
+        self.assertEqual(stmt.where.op, "AND")
+        self.assertEqual(stmt.where.left.op, ">")
+        self.assertEqual(stmt.where.left.left.op, "*")
 
     def test_error_has_position(self):
         with self.assertRaises(SyntaxErr) as ctx:

@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-page-node-id="VG1lOjm8kBtBWuReT74VQJ">
+<head data-page-node-id="hGbkgv9wx5SfcXGNxMfCpS">
+<meta charset="utf-8" data-page-node-id="Q7oo9J52EQRgtAjtLoQhK8">
+<meta name="viewport" content="width=device-width, initial-scale=1" data-page-node-id="VTMVWOIISLejDo69x4iBJF">
+<title>7. 聚合表达式（SUM/COUNT 混合）</title>
+<style>
+  :root {
+    --bg: #f6f7fb;
+    --panel: #ffffff;
+    --text: #1f2733;
+    --muted: #6b7280;
+    --line: #e3e7ef;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #14171c;
+      --panel: #1c2027;
+      --text: #eef1f6;
+      --muted: #9aa4b2;
+      --line: #2b313a;
+    }
+    .canvas { background: #22262e; }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 28px 24px 40px;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei",
+                 "PingFang SC", sans-serif;
+  }
+  h1 { font-size: 19px; margin: 0 0 6px; }
+  .sub { margin: 0 0 18px; color: var(--muted); font-size: 13px; }
+  .sub pre {
+    margin: 8px 0 0; padding: 10px 12px; background: var(--panel);
+    border: 1px solid var(--line); border-radius: 8px; font-size: 12.5px;
+    white-space: pre-wrap; word-break: break-all;
+  }
+  .canvas {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+    padding: 18px; overflow-x: auto;
+  }
+  .canvas svg { display: block; margin: 0 auto; }
+  .legend { margin-top: 16px; display: flex; flex-wrap: wrap; gap: 8px; }
+  .chip {
+    font-size: 12px; padding: 3px 10px; border-radius: 999px;
+    border: 1px solid; font-weight: 600;
+  }
+  .node { cursor: default; }
+  .node rect { transition: filter .15s ease; }
+  .node:hover rect { filter: drop-shadow(0 3px 8px rgba(0,0,0,.18)); }
+  footer { margin-top: 20px; color: var(--muted); font-size: 12px; }
+</style>
+</head>
+<body data-page-node-id="l6BWt5FVTM6eS1RzSsWntN">
+<h1 data-page-node-id="jt6XzrqaEWZYhBPBcSFYhH">7. 聚合表达式（SUM/COUNT 混合）</h1>
+<div class="sub" data-page-node-id="VBmxEKlOArPfD7FFoujE9j">
+  生成的计划树（自顶向下阅读，根节点在最上方）。悬停任意节点可查看其 JSON 结构。
+  <pre data-page-node-id="inIByPhIfxMmHRv9CRNcKm">SELECT dept, SUM(age) / COUNT(*) AS avg_age FROM student GROUP BY dept ORDER BY avg_age DESC;</pre>
+</div>
+<div class="canvas" data-page-node-id="gQO9q4Mpt47vUb5y4nTF2m">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 397 458" width="397" height="458" role="img" aria-label="执行计划树" data-page-node-id="ADDLAR3OaHSF6OvuNbl21u">
+<path d="M 198.4 73.0 V 94.0 H 152.8 V 115.0" fill="none" stroke="#c2c9d6" stroke-width="1.6" data-page-node-id="XslX7SQBTiQYjnbF5WjZCm"/>
+<path d="M 152.8 177.0 V 198.0 H 145.2 V 219.0" fill="none" stroke="#c2c9d6" stroke-width="1.6" data-page-node-id="8QKiPql6HoDIFTCnqnUFI7"/>
+<path d="M 145.2 281.0 V 302.0 H 111.0 V 323.0" fill="none" stroke="#c2c9d6" stroke-width="1.6" data-page-node-id="DwbHpmh8gKBTWUvuyviEbB"/>
+<g class="node" data-page-node-id="F8CrGjr6X2FkifzQP5vKeu">
+<title>{&quot;op&quot;: &quot;Project&quot;, &quot;columns&quot;: [&quot;dept&quot;, &quot;avg_age&quot;], &quot;child&quot;: {&quot;op&quot;: &quot;Sort&quot;, &quot;keys&quot;: [{&quot;expr&quot;: {&quot;type&quot;: &quot;BinaryOp&quot;, &quot;op&quot;: &quot;/&quot;, &quot;left&quot;: {&quot;type&quot;: &quot;ColumnRef&quot;, &quot;name&quot;: &quot;SUM(age)&quot;}, &quot;right&quot;: {&quot;type&quot;: &quot;ColumnRef&quot;, &quot;name&quot;: &quot;COUNT(*)&quot;}}, &quot;desc&quot;: true}], &quot;child&quot;: {&quot;op&quot;: &quot;Aggregate&quot;, &quot;group_by&quot;: [{&quot;type&quot;: &quot;ColumnRef&quot;, &quot;name&quot;: &quot;dept&quot;}], &quot;group_labels&quot;: [&quot;dept&quot;], &quot;aggregates&quot;: [{&quot;func&quot;: &quot;SUM&quot;, &quot;label&quot;: &quot;SUM(age)&quot;, &quot;star&quot;: false, &quot;arg&quot;: {&quot;type&quot;: &quot;ColumnRef&quot;, &quot;name&quot;: &quot;age&quot;}}, {&quot;func&quot;: &quot;COUNT&quot;, &quot;label&quot;: &quot;COUNT(*)&quot;, &quot;star&quot;: true, &quot;arg&quot;: null}], &quot;child&quot;: {&quot;op&quot;: &quot;SeqScan&quot;, &quot;table_name&quot;: &quot;student&quot;}}}, &quot;exprs&quot;: [{&quot;type&quot;: &quot;ColumnRef&quot;, &quot;name&quot;: &quot;dept&quot;}, {&quot;type&quot;: &quot;BinaryOp&quot;, &quot;op&quot;: &quot;/&quot;, &quot;left&quot;: {&quot;type&quot;: &quot;ColumnRef&quot;, &quot;name&quot;: &quot;SUM(age)&quot;}, &quot;right&quot;: {&quot;type&quot;: &quot;ColumnRef&quot;, &quot;name&quot;: &quot;COUNT(*)&quot;}}], &quot;labels&quot;: [&quot;dept&quot;, &quot;avg_age&quot;]}</title>
+<rect x="40.0" y="11.0" width="316.8" height="62" rx="9" fill="#e6f7ee" stroke="#27ae60" stroke-width="1.8" data-page-node-id="NKU3c2K5eR5jfG13FUiJtO"/>
+<text x="198.4" y="33.0" text-anchor="middle" font-size="14" font-weight="700" fill="#1b7a44" data-page-node-id="eQNaRmET6gPoXe3nYDE7jd">Project</text>
+<text x="198.4" y="51.0" text-anchor="middle" font-size="11.5" fill="#4a5568" data-page-node-id="i3ZFFE8DiccWICc7628hv9">dept, (SUM(age) / COUNT(*)) A…</text>
+</g>
+<g class="node" data-page-node-id="XHf3hNL5OXPqJwfqabrgUZ">
+<title>{&quot;op&quot;: &quot;Sort&quot;, &quot;keys&quot;: [{&quot;expr&quot;: {&quot;type&quot;: &quot;BinaryOp&quot;, &quot;op&quot;: &quot;/&quot;, &quot;left&quot;: {&quot;type&quot;: &quot;ColumnRef&quot;, &quot;name&quot;: &quot;SUM(age)&quot;}, &quot;right&quot;: {&quot;type&quot;: &quot;ColumnRef&quot;, &quot;name&quot;: &quot;COUNT(*)&quot;}}, &quot;desc&quot;: true}], &quot;child&quot;: {&quot;op&quot;: &quot;Aggregate&quot;, &quot;group_by&quot;: [{&quot;type&quot;: &quot;ColumnRef&quot;, &quot;name&quot;: &quot;dept&quot;}], &quot;group_labels&quot;: [&quot;dept&quot;], &quot;aggregates&quot;: [{&quot;func&quot;: &quot;SUM&quot;, &quot;label&quot;: &quot;SUM(age)&quot;, &quot;star&quot;: false, &quot;arg&quot;: {&quot;type&quot;: &quot;ColumnRef&quot;, &quot;name&quot;: &quot;age&quot;}}, {&quot;func&quot;: &quot;COUNT&quot;, &quot;label&quot;: &quot;COUNT(*)&quot;, &quot;star&quot;: true, &quot;arg&quot;: null}], &quot;child&quot;: {&quot;op&quot;: &quot;SeqScan&quot;, &quot;table_name&quot;: &quot;student&quot;}}}</title>
+<rect x="40.0" y="115.0" width="225.6" height="62" rx="9" fill="#eef2f7" stroke="#6b7a90" stroke-width="1.8" data-page-node-id="ADEa2yJp6lpnBx4ewHLowB"/>
+<text x="152.8" y="137.0" text-anchor="middle" font-size="14" font-weight="700" fill="#44546a" data-page-node-id="djwntmHSh04CphCJWopPx5">Sort</text>
+<text x="152.8" y="155.0" text-anchor="middle" font-size="11.5" fill="#4a5568" data-page-node-id="XfILmtvP2ooRBGw5G8QybT">(SUM(age) / COUNT(*)) DESC</text>
+</g>
+<g class="node" data-page-node-id="MxNitlRfwNmDX05MHWdDXG">
+<title>{&quot;op&quot;: &quot;Aggregate&quot;, &quot;group_by&quot;: [{&quot;type&quot;: &quot;ColumnRef&quot;, &quot;name&quot;: &quot;dept&quot;}], &quot;group_labels&quot;: [&quot;dept&quot;], &quot;aggregates&quot;: [{&quot;func&quot;: &quot;SUM&quot;, &quot;label&quot;: &quot;SUM(age)&quot;, &quot;star&quot;: false, &quot;arg&quot;: {&quot;type&quot;: &quot;ColumnRef&quot;, &quot;name&quot;: &quot;age&quot;}}, {&quot;func&quot;: &quot;COUNT&quot;, &quot;label&quot;: &quot;COUNT(*)&quot;, &quot;star&quot;: true, &quot;arg&quot;: null}], &quot;child&quot;: {&quot;op&quot;: &quot;SeqScan&quot;, &quot;table_name&quot;: &quot;student&quot;}}</title>
+<rect x="40.0" y="219.0" width="210.4" height="62" rx="9" fill="#e0f7f7" stroke="#00a3a3" stroke-width="1.8" data-page-node-id="fPB5e2cI5TJ0sYu2Fls9Qf"/>
+<text x="145.2" y="241.0" text-anchor="middle" font-size="14" font-weight="700" fill="#017070" data-page-node-id="CUiJVTSVXgCWhD2TIJDZ5k">Aggregate</text>
+<text x="145.2" y="259.0" text-anchor="middle" font-size="11.5" fill="#4a5568" data-page-node-id="9v7R8z2yrOIcl998S7etWD">group by: dept</text>
+<text x="145.2" y="274.0" text-anchor="middle" font-size="11.5" fill="#4a5568" data-page-node-id="ds9QpLSFyctE3qi7MTVEkg">aggs: SUM(age), COUNT(*)</text>
+</g>
+<g class="node" data-page-node-id="yo2sU6zEzVzw57XSrhMV2q">
+<title>{&quot;op&quot;: &quot;SeqScan&quot;, &quot;table_name&quot;: &quot;student&quot;}</title>
+<rect x="40.0" y="323.0" width="142.0" height="62" rx="9" fill="#e6f0ff" stroke="#2f80ed" stroke-width="1.8" data-page-node-id="GhYd7iJQrJqPOXr6cfd1ZF"/>
+<text x="111.0" y="345.0" text-anchor="middle" font-size="14" font-weight="700" fill="#1a5fb4" data-page-node-id="4BJte6VpJxh3C9EZjzWQkz">SeqScan</text>
+<text x="111.0" y="363.0" text-anchor="middle" font-size="11.5" fill="#4a5568" data-page-node-id="PCf1FXJ8vk1UEE1nmuhyVq">table = student</text>
+</g>
+</svg>
+</div>
+<div class="legend" data-page-node-id="huaoPDUF2HtOxfjb9i4Svj"><span class="chip" style="background:#eeeaff;border-color:#7c6cf0;color:#4a3fbf" data-page-node-id="1Wodgi9JgMXjeEcpqcGA6L">DDL/DML</span><span class="chip" style="background:#e6f0ff;border-color:#2f80ed;color:#1a5fb4" data-page-node-id="E3dw2b436Z0FHb0LA8lzhb">顺序扫描</span><span class="chip" style="background:#fff2e3;border-color:#f2994a;color:#b8600f" data-page-node-id="cdki1Yb3GtwqGldgRXdirs">过滤</span><span class="chip" style="background:#e6f7ee;border-color:#27ae60;color:#1b7a44" data-page-node-id="91TF4j3fmCmNxvUZ9zdnmY">投影</span><span class="chip" style="background:#ffe9e9;border-color:#eb5757;color:#b32b2b" data-page-node-id="1aWOs3Asm1APMKbqMYkhtx">连接</span><span class="chip" style="background:#e0f7f7;border-color:#00a3a3;color:#017070" data-page-node-id="tDg6mjt8EVFoCTHx8vH09Y">聚合</span><span class="chip" style="background:#eef2f7;border-color:#6b7a90;color:#44546a" data-page-node-id="DlmLwDKqE3tnLSPcPzFuTo">排序</span></div>
+<footer data-page-node-id="3DACrt3nso7SC6vorCPWUA">Mini-DB · 模块一 SQL 编译器 · 计划可视化</footer>
+</body>
+</html>

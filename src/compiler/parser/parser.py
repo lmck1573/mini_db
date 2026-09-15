@@ -1,24 +1,31 @@
 """语法分析器：递归下降，Token 流 -> AST。
 
-P0 范围：CREATE TABLE / INSERT / SELECT / DELETE，WHERE 仅支持单条件比较。
-遇到 AND/OR/NOT、算术运算、括号表达式等 P1 特性时，按语法错误报出。
+语句层：CREATE TABLE / INSERT / SELECT / DELETE / EXPLAIN。
+表达式层：按优先级分层解析
+    or_expr → and_expr → not_expr → comparison
+            → additive → multiplicative → unary → primary
+支持 AND / OR / NOT、算术运算（+ - * /）、嵌套括号、聚合函数调用
+（COUNT/SUM/AVG/MIN/MAX）与限定列名（`a.id`）。
+
+SELECT 扩展语法：
+    SELECT <* | 投影项 , ...>
+    FROM <表> [AS 别名] { JOIN | LEFT JOIN | CROSS JOIN | , } <表> [ON 表达式]
+    [WHERE 表达式]
+    [GROUP BY 表达式 , ...]
+    [HAVING 表达式]
+    [ORDER BY <表达式> [ASC|DESC] , ...]
 """
 
 from __future__ import annotations
 
-from typing import List, Tuple
+from typing import List, Optional, Tuple
 
 from ..errors import SyntaxErr
 from ..lexer.token import ConstType, Token, TokenType
-from .ast_nodes import (DEFAULT_VARCHAR_LENGTH, DATA_TYPES, BinaryOp, ColumnDef,
-                        ColumnRef, CreateTable, Delete, Insert, Literal, Select,
-                        Statement)
-
-# P0 支持的比较运算符
-COMPARISON_OPS = ("=", "<>", "!=", "<", "<=", ">", ">=")
-
-# P1 保留字：词法层能识别，语法层明确不支持
-UNSUPPORTED_LOGICAL = ("AND", "OR", "NOT")
+from .ast_nodes import (COMPARISON_OPS, DEFAULT_VARCHAR_LENGTH, DATA_TYPES,
+                        BinaryOp, ColumnDef, ColumnRef, CreateTable, Delete,
+                        Explain, Expr, FunctionCall, Insert, Join, Literal,
+                        OrderItem, Select, Statement, TableRef, UnaryOp)
 
 
 def _describe(token: Token) -> str:
@@ -58,6 +65,10 @@ class Parser:
     def _is_delimiter(self, text: str, offset: int = 0) -> bool:
         token = self._peek(offset)
         return token.type is TokenType.DELIMITER and token.lexeme == text
+
+    def _is_operator(self, text: str, offset: int = 0) -> bool:
+        token = self._peek(offset)
+        return token.type is TokenType.OPERATOR and token.lexeme == text
 
     def _expect_keyword(self, keyword: str) -> Token:
         if not self._is_keyword(keyword):
@@ -99,8 +110,10 @@ class Parser:
             return self._parse_select()
         if self._is_keyword("DELETE"):
             return self._parse_delete()
+        if self._is_keyword("EXPLAIN"):
+            return self._parse_explain()
         token = self._peek()
-        raise SyntaxErr("期望 CREATE / INSERT / SELECT / DELETE，实际得到 "
+        raise SyntaxErr("期望 CREATE / INSERT / SELECT / DELETE / EXPLAIN，实际得到 "
                         f"{_describe(token)}", token.line, token.col)
 
     # ------------------------------------------------------------------
@@ -152,7 +165,7 @@ class Parser:
         self._expect_keyword("INTO")
         table_token = self._expect_identifier("表名")
 
-        columns: List[str] | None = None
+        columns: Optional[List[str]] = None
         if self._is_delimiter("("):
             self._advance()
             columns = [self._expect_identifier("列名").lexeme]
@@ -179,7 +192,7 @@ class Parser:
         return values
 
     def _parse_literal(self) -> Literal:
-        """P0 的值只允许常量或 NULL。"""
+        """INSERT 的值只允许常量或 NULL。"""
         token = self._peek()
         if token.type is TokenType.CONST:
             self._advance()
@@ -188,78 +201,270 @@ class Parser:
             self._advance()
             return Literal(None, ConstType.NULL, token.line, token.col)
         if token.type is TokenType.IDENTIFIER:
-            raise SyntaxErr("INSERT 的值必须是常量或 NULL（P0 不支持表达式）",
+            raise SyntaxErr("INSERT 的值必须是常量或 NULL（不支持表达式）",
                             token.line, token.col)
         raise SyntaxErr(f"期望常量或 NULL，实际得到 {_describe(token)}", token.line, token.col)
 
     # ------------------------------------------------------------------
-    # SELECT / DELETE 公共部分
+    # WHERE 表达式（按优先级分层）
     # ------------------------------------------------------------------
-    def _parse_where(self) -> BinaryOp:
+    def _parse_where(self) -> Expr:
         self._expect_keyword("WHERE")
-        condition = self._parse_condition()
-        self._reject_logical_continuation()
-        return condition
+        return self._parse_expr()
 
-    def _parse_condition(self) -> BinaryOp:
-        left = self._parse_operand()
-        token = self._peek()
-        if token.type is not TokenType.OPERATOR or token.lexeme not in COMPARISON_OPS:
-            raise SyntaxErr(f"期望比较运算符（{' '.join(COMPARISON_OPS)}），实际得到 "
-                            f"{_describe(token)}", token.line, token.col)
-        self._advance()
-        right = self._parse_operand()
-        return BinaryOp(token.lexeme, left, right, left.line, left.col)
+    def _parse_expr(self) -> Expr:
+        """or_expr：优先级最低，最后结合。"""
+        left = self._parse_and()
+        while self._is_keyword("OR"):
+            token = self._advance()
+            right = self._parse_and()
+            left = BinaryOp(token.lexeme.upper(), left, right, token.line, token.col)
+        return left
 
-    def _parse_operand(self):
+    def _parse_and(self) -> Expr:
+        left = self._parse_not()
+        while self._is_keyword("AND"):
+            token = self._advance()
+            right = self._parse_not()
+            left = BinaryOp(token.lexeme.upper(), left, right, token.line, token.col)
+        return left
+
+    def _parse_not(self) -> Expr:
+        if self._is_keyword("NOT"):
+            token = self._advance()
+            return UnaryOp("NOT", self._parse_not(), token.line, token.col)
+        return self._parse_comparison()
+
+    def _parse_comparison(self) -> Expr:
+        """比较运算：左结合、不可连写（a > b > c 属语法错误由上层发现）。"""
+        left = self._parse_additive()
         token = self._peek()
-        if token.type is TokenType.IDENTIFIER:
+        if token.type is TokenType.OPERATOR and token.lexeme in COMPARISON_OPS:
             self._advance()
-            return ColumnRef(token.lexeme, token.line, token.col)
+            right = self._parse_additive()
+            return BinaryOp(token.lexeme, left, right, token.line, token.col)
+        return left
+
+    def _parse_additive(self) -> Expr:
+        """加减：左结合。"""
+        left = self._parse_multiplicative()
+        while self._is_operator("+") or self._is_operator("-"):
+            token = self._advance()
+            right = self._parse_multiplicative()
+            left = BinaryOp(token.lexeme, left, right, token.line, token.col)
+        return left
+
+    def _parse_multiplicative(self) -> Expr:
+        """乘除：优先级高于加减。"""
+        left = self._parse_unary()
+        while self._is_operator("*") or self._is_operator("/"):
+            token = self._advance()
+            right = self._parse_unary()
+            left = BinaryOp(token.lexeme, left, right, token.line, token.col)
+        return left
+
+    def _parse_unary(self) -> Expr:
+        """一元正负号：右结合，可叠加（--a）。"""
+        token = self._peek()
+        if token.type is TokenType.OPERATOR and token.lexeme in ("+", "-"):
+            self._advance()
+            return UnaryOp(token.lexeme, self._parse_unary(), token.line, token.col)
+        return self._parse_primary()
+
+    def _parse_primary(self) -> Expr:
+        """最小单元：常量 / NULL / 列名（可限定）/ 聚合函数 / '(' 表达式 ')'。"""
+        token = self._peek()
         if token.type is TokenType.CONST:
             self._advance()
             return Literal(token.value, token.value_type, token.line, token.col)
         if token.type is TokenType.KEYWORD and token.lexeme.upper() == "NULL":
             self._advance()
             return Literal(None, ConstType.NULL, token.line, token.col)
-        if token.type is TokenType.KEYWORD and token.lexeme.upper() in UNSUPPORTED_LOGICAL:
-            raise SyntaxErr(f"P0 不支持 {token.lexeme.upper()} 逻辑组合（进阶特性）",
-                            token.line, token.col)
+        if token.type is TokenType.IDENTIFIER:
+            # 函数调用：IDENT '('
+            if self._is_delimiter("(", 1):
+                return self._parse_function_call()
+            return self._parse_column_ref()
         if token.type is TokenType.DELIMITER and token.lexeme == "(":
-            raise SyntaxErr("P0 不支持括号表达式（进阶特性）", token.line, token.col)
-        raise SyntaxErr(f"期望列名或常量，实际得到 {_describe(token)}", token.line, token.col)
+            self._advance()
+            expr = self._parse_expr()
+            self._expect_delimiter(")")
+            return expr
+        raise SyntaxErr(f"期望列名、常量或 '('，实际得到 {_describe(token)}",
+                        token.line, token.col)
 
-    def _reject_logical_continuation(self) -> None:
-        """条件之后若紧跟 AND/OR，给出明确的不支持提示。"""
-        if any(self._is_keyword(kw) for kw in UNSUPPORTED_LOGICAL):
-            token = self._peek()
-            raise SyntaxErr(f"P0 不支持 {token.lexeme.upper()} 逻辑组合（进阶特性）",
-                            token.line, token.col)
+    def _parse_column_ref(self) -> ColumnRef:
+        """列引用，支持 `列名` 与 `表名.列名` 两种写法。"""
+        first = self._expect_identifier("列名")
+        if self._is_delimiter("."):
+            self._advance()
+            if self._is_operator("*"):
+                token = self._peek()
+                raise SyntaxErr("暂不支持 '表.*' 写法，请直接使用 *", token.line, token.col)
+            second = self._expect_identifier("列名")
+            return ColumnRef(second.lexeme, second.line, second.col, first.lexeme)
+        return ColumnRef(first.lexeme, first.line, first.col)
+
+    def _parse_function_call(self) -> FunctionCall:
+        """函数调用：COUNT(*)、SUM(age) 等（函数名合法性由语义层校验）。"""
+        name_token = self._expect_identifier("函数名")
+        self._expect_delimiter("(")
+        star = False
+        arg: Optional[Expr] = None
+        if self._is_operator("*"):
+            self._advance()
+            star = True
+        else:
+            arg = self._parse_expr()
+        self._expect_delimiter(")")
+        return FunctionCall(name_token.lexeme.upper(), arg, star,
+                            name_token.line, name_token.col)
 
     # ------------------------------------------------------------------
-    # SELECT / DELETE
+    # FROM / JOIN / GROUP BY / HAVING / ORDER BY
+    # ------------------------------------------------------------------
+    def _parse_table_ref(self) -> TableRef:
+        """表引用：表名 [AS] [别名]。"""
+        token = self._expect_identifier("表名")
+        alias: Optional[str] = None
+        if self._is_keyword("AS"):
+            self._advance()
+            alias = self._expect_identifier("表别名").lexeme
+        elif self._peek().type is TokenType.IDENTIFIER:
+            alias = self._advance().lexeme
+        return TableRef(token.lexeme, alias, token.line, token.col)
+
+    def _parse_joins(self) -> List[Join]:
+        """解析零个或多个连接子句。
+
+        支持：`JOIN t ON e`、`INNER JOIN t ON e`、`LEFT [OUTER] JOIN t ON e`、
+             `CROSS JOIN t`、以及逗号隐式连接 `FROM a, b`（等价 CROSS JOIN）。
+        """
+        joins: List[Join] = []
+        while True:
+            head = self._peek()
+            if self._is_delimiter(","):
+                self._advance()
+                joins.append(Join(self._parse_table_ref(), "CROSS", None,
+                                  head.line, head.col))
+                continue
+
+            join_type: Optional[str] = None
+            if self._is_keyword("JOIN"):
+                self._advance()
+                join_type = "INNER"
+            elif self._is_keyword("INNER") and self._is_keyword("JOIN", 1):
+                self._advance()
+                self._advance()
+                join_type = "INNER"
+            elif self._is_keyword("CROSS") and self._is_keyword("JOIN", 1):
+                self._advance()
+                self._advance()
+                join_type = "CROSS"
+            elif self._is_keyword("LEFT"):
+                self._advance()
+                if self._is_keyword("OUTER"):
+                    self._advance()
+                self._expect_keyword("JOIN")
+                join_type = "LEFT"
+            elif self._is_keyword("RIGHT") or self._is_keyword("FULL"):
+                token = self._peek()
+                raise SyntaxErr(
+                    f"暂不支持 {token.lexeme.upper()} JOIN（当前支持 INNER / LEFT / CROSS）",
+                    token.line, token.col)
+            else:
+                break
+
+            table = self._parse_table_ref()
+            on: Optional[Expr] = None
+            if self._is_keyword("ON"):
+                self._advance()
+                on = self._parse_expr()
+            elif join_type != "CROSS":
+                token = self._peek()
+                raise SyntaxErr(f"期望 ON，实际得到 {_describe(token)}",
+                                token.line, token.col)
+            joins.append(Join(table, join_type, on, head.line, head.col))
+        return joins
+
+    def _parse_group_by(self) -> List[Expr]:
+        self._expect_keyword("GROUP")
+        self._expect_keyword("BY")
+        items = [self._parse_expr()]
+        while self._is_delimiter(","):
+            self._advance()
+            items.append(self._parse_expr())
+        return items
+
+    def _parse_order_by(self) -> List[OrderItem]:
+        self._expect_keyword("ORDER")
+        self._expect_keyword("BY")
+        items = [self._parse_order_item()]
+        while self._is_delimiter(","):
+            self._advance()
+            items.append(self._parse_order_item())
+        return items
+
+    def _parse_order_item(self) -> OrderItem:
+        expr = self._parse_expr()
+        desc = False
+        if self._is_keyword("ASC"):
+            self._advance()
+        elif self._is_keyword("DESC"):
+            self._advance()
+            desc = True
+        return OrderItem(expr, desc, getattr(expr, "line", 0), getattr(expr, "col", 0))
+
+    # ------------------------------------------------------------------
+    # SELECT / DELETE / EXPLAIN
     # ------------------------------------------------------------------
     def _parse_select(self) -> Select:
         kw = self._expect_keyword("SELECT")
 
         star = False
-        columns: List[ColumnRef] = []
-        if self._peek().type is TokenType.OPERATOR and self._peek().lexeme == "*":
+        columns: List[Expr] = []
+        aliases: List[Optional[str]] = []
+        if self._is_operator("*"):
             self._advance()
             star = True
         else:
-            token = self._expect_identifier("列名")
-            columns.append(ColumnRef(token.lexeme, token.line, token.col))
+            expr, alias = self._parse_select_item()
+            columns.append(expr)
+            aliases.append(alias)
             while self._is_delimiter(","):
                 self._advance()
-                token = self._expect_identifier("列名")
-                columns.append(ColumnRef(token.lexeme, token.line, token.col))
+                expr, alias = self._parse_select_item()
+                columns.append(expr)
+                aliases.append(alias)
 
         self._expect_keyword("FROM")
-        table_token = self._expect_identifier("表名")
+        from_table = self._parse_table_ref()
+        joins = self._parse_joins()
 
         where = self._parse_where() if self._is_keyword("WHERE") else None
-        return Select(table_token.lexeme, star, columns, where, kw.line, kw.col)
+        group_by = self._parse_group_by() if self._is_keyword("GROUP") else []
+        having = None
+        if self._is_keyword("HAVING"):
+            self._advance()
+            having = self._parse_expr()
+        order_by = self._parse_order_by() if self._is_keyword("ORDER") else []
+
+        return Select(
+            from_table.name, star, columns, where, kw.line, kw.col,
+            from_alias=from_table.alias, joins=joins, group_by=group_by,
+            having=having, order_by=order_by, aliases=aliases,
+        )
+
+    def _parse_select_item(self) -> Tuple[Expr, Optional[str]]:
+        """一个投影项：表达式 [AS] [别名]。"""
+        expr = self._parse_expr()
+        alias: Optional[str] = None
+        if self._is_keyword("AS"):
+            self._advance()
+            alias = self._expect_identifier("列别名").lexeme
+        elif self._peek().type is TokenType.IDENTIFIER:
+            alias = self._advance().lexeme
+        return expr, alias
 
     def _parse_delete(self) -> Delete:
         kw = self._expect_keyword("DELETE")
@@ -267,6 +472,13 @@ class Parser:
         table_token = self._expect_identifier("表名")
         where = self._parse_where() if self._is_keyword("WHERE") else None
         return Delete(table_token.lexeme, where, kw.line, kw.col)
+
+    def _parse_explain(self) -> Explain:
+        kw = self._expect_keyword("EXPLAIN")
+        inner = self._parse_statement()
+        if isinstance(inner, Explain):
+            raise SyntaxErr("EXPLAIN 不支持嵌套", kw.line, kw.col)
+        return Explain(inner, kw.line, kw.col)
 
 
 def parse(tokens: List[Token]) -> List[Statement]:

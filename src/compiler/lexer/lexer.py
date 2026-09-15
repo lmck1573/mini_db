@@ -17,8 +17,8 @@ from .token import ConstType, Token, TokenType
 OPERATORS_2 = ("<=", ">=", "<>", "!=")
 # 单字符运算符
 OPERATORS_1 = "=<>+-*/"
-# 分隔符
-DELIMITERS = "(),;"
+# 分隔符（'.' 用于限定列名 table.column / alias.column）
+DELIMITERS = "(),;."
 
 
 class Lexer:

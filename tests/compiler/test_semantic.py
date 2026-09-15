@@ -128,5 +128,53 @@ class TestCatalog(unittest.TestCase):
         self.assertTrue(catalog.has_table("STUDENT"))
 
 
+class TestSemanticExpressions(unittest.TestCase):
+    """P1：逻辑 / 算术表达式的类型检查。"""
+
+    PREFIX = "CREATE TABLE t(id INT, age INT, name VARCHAR(20), score FLOAT);"
+
+    def _check(self, where):
+        _, error = compile_sql(f"{self.PREFIX} SELECT * FROM t WHERE {where};")
+        return error
+
+    def test_logic_and_arithmetic_ok(self):
+        self.assertIsNone(self._check("age > 1 + 2 AND name <> 'x'"))
+        self.assertIsNone(self._check("NOT (age > 18)"))
+        self.assertIsNone(self._check("(age + 1) * 2 > 40 OR id = 1"))
+
+    def test_numeric_promotion_ok(self):
+        """INT 与 FLOAT 混合算术结果提升为 FLOAT，允许。"""
+        self.assertIsNone(self._check("score + 1 > 2"))
+
+    def test_arithmetic_on_string_raises(self):
+        error = self._check("name + 1 > 2")
+        self.assertIsInstance(error, SemanticError)
+        self.assertIn("算术运算", error.message)
+
+    def test_logical_on_number_raises(self):
+        error = self._check("age AND id > 1")
+        self.assertIsInstance(error, SemanticError)
+        self.assertIn("逻辑表达式", error.message)
+
+    def test_not_on_number_raises(self):
+        error = self._check("NOT age")
+        self.assertIsInstance(error, SemanticError)
+
+    def test_where_must_be_boolean(self):
+        error = self._check("age + 1")
+        self.assertIsInstance(error, SemanticError)
+        self.assertIn("逻辑表达式", error.message)
+
+    def test_unknown_column_in_nested_expr_raises(self):
+        error = self._check("age > 1 AND nope = 1")
+        self.assertIsInstance(error, SemanticError)
+        self.assertIn("不存在列", error.message)
+
+    def test_string_vs_number_comparison_raises(self):
+        error = self._check("name > 1")
+        self.assertIsInstance(error, SemanticError)
+        self.assertIn("无法比较", error.message)
+
+
 if __name__ == "__main__":
     unittest.main()

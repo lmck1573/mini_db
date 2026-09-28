@@ -55,18 +55,6 @@ python -m src.main
 python -m unittest discover -s tests -t . -p "test_*.py" -v
 ```
 
-## 任务分级（当前只做 P0）
-
-完整清单见 [`docs/task-tiers.md`](docs/task-tiers.md)。
-
-| 级别 | 内容 | 状态 |
-|------|------|------|
-| **P0 必做** | Lexer + Token 位置、四类 SQL、AST、Catalog、语义检查、Logical Plan、错误定位、基础测试 | ✅ 进行中 |
-| **P1 进阶** | AND/OR/NOT、复杂表达式、≥2 条优化规则、智能错误诊断、Plan 可视化、隐藏测试通过率 | ⏸ 暂缓 |
-| **P2 扩展** | JOIN/GROUP BY、Fuzz Testing、优化框架、代价模型、EXPLAIN、高级错误恢复 | 🚫 不做 |
-
-**越界禁令**：不在 P0 清单内的功能一律不实现；"顺手能加"的 P1/P2 特性只记录到 `docs/task-tiers.md`，待 P0 全绿并确认后再动。
-
 ## 分工约定
 
 | 模块 | 内容 | 负责人 |

@@ -1,16 +1,20 @@
 """storage 模块自定义异常体系。
 
-所有存储层异常均继承自 StorageError，engine 只需捕获 StorageError 即可兜底；
-各层抛出更具体的子类，便于定位错误来源：
 
-- DiskError  : disk 层文件 IO / 越界 / 长度错误
-- PageError  : page 层页分配 / 释放 / 元数据校验错误
-- CacheError : cache 层非法策略 / 容量 / 页数据长度错误
+
+继承关系：
+    StorageError（基类）
+       ├── DiskError   —— disk 层：文件 IO / 越界 / 长度错误
+       ├── PageError   —— page 层：页分配 / 释放 / 元数据校验错误
+       └── CacheError  —— cache 层：非法策略 / 容量 / 页数据长度错误
 """
 
 
 class StorageError(Exception):
-    """存储层异常基类。"""
+    """存储层异常基类。
+
+    作用：作为所有存储层异常的公共父类，让上层可以用 `except StorageError` 统一兜底。
+    """
 
 
 class DiskError(StorageError):
